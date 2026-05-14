@@ -1,64 +1,94 @@
 import streamlit as st
 import pandas as pd
-import requests
-from io import BytesIO
+import os
 
-# --- البروتوكول المادي للربط بين المستودعات ---
-# الربط مع المخزن الرئيسي 13-05
-ORIGIN_USER = "imadsab2013-coder"
-ORIGIN_REPO = "Majlis-Al-Bina13-05"
-BRANCH = "main"
-
-# روابط المادة الخام
-URL_QURAN = f"https://raw.githubusercontent.com/{ORIGIN_USER}/{ORIGIN_REPO}/{BRANCH}/data/data_quran.xlsx"
-URL_WORDS = f"https://raw.githubusercontent.com/{ORIGIN_USER}/{ORIGIN_REPO}/{BRANCH}/data/data_words.xlsx"
-
-def load_data_from_origin(url):
-    """وظيفة العضو A1: سحب المادة الخام من المخزن الرئيسي"""
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return pd.read_excel(BytesIO(response.content))
-    except Exception as e:
-        st.error(f"⚠️ فشل الاتصال بالمخزن 13-05: {e}")
-        return None
-
-# --- إعدادات واجهة مجلس البينة ---
-st.set_page_config(page_title="مختبر البينة 14-14", layout="wide")
-
-st.title("🧪 مختبر التطوير (14-14)")
-st.caption(f"متصل حالياً بالمخزن الرئيسي: {ORIGIN_REPO}")
-
-# المزامنة
-if st.sidebar.button("🔄 مزامنة مع المخزن 13-05"):
-    with st.spinner("جاري جلب البيانات..."):
-        df_q = load_data_from_origin(URL_QURAN)
-        df_w = load_data_from_origin(URL_WORDS)
-        if df_q is not None and df_w is not None:
-            st.session_state['data_quran'] = df_q
-            st.session_state['data_words'] = df_w
-            st.sidebar.success("🟢 البيانات محملة وجاهزة")
-
-# --- منطقة الاختبار (السبورة) ---
-word_to_search = st.text_input("أدخل اللفظ للاختبار:")
-
-if word_to_search:
-    if 'data_words' in st.session_state:
-        # منطق العضو A1 في البحث
-        data_w = st.session_state['data_words']
-        result = data_w[data_w['word'] == word_to_search]
+# --- 1. محرك البيانات المدمج (Data Engine) ---
+class DataEngine:
+    @staticmethod
+    def load_local_resources():
+        """جلب المادة الخام من المجلد المحلي data/"""
+        # المسارات المادية كما هي في GitHub الخاص بك
+        path_quran = "data/data_quran.xlsx"
+        path_words = "data/data_words.xlsx"
         
-        if not result.empty:
-            st.success(f"تم العثور على اللفظ: {word_to_search}")
-            st.write(result)
-            
-            # هنا نربط مع العضو A2 لجلب الآيات
-            if 'data_quran' in st.session_state:
-                st.subheader("📖 السياقات المادية (من ملف القرآن)")
-                # عرض عينة من ملف القرآن (سنطور منطق الربط لاحقاً)
-                st.dataframe(st.session_state['data_quran'].head(10))
-        else:
-            st.error("اللفظ غير موجود في قاعدة بيانات 13-05")
-    else:
-        st.warning("يرجى الضغط على زر المزامنة أولاً.")
+        try:
+            # التحقق من وجود المجلد والملفات أولاً
+            if os.path.exists(path_quran) and os.path.exists(path_words):
+                df_quran = pd.read_excel(path_quran)
+                df_words = pd.read_excel(path_words)
+                return df_quran, df_words
+            else:
+                st.error("⚠️ خطأ مادي: المجلد 'data' أو الملفات غير موجودة في الجذر.")
+                return None, None
+        except Exception as e:
+            st.error(f"❌ فشل في قراءة الإكسيل: {e}")
+            return None, None
 
+# --- 2. إعدادات واجهة مجلس البينة ---
+st.set_page_config(page_title="مجلس البينة 14-14", layout="wide")
+
+# تصميم السبورة
+st.markdown("""
+    <style>
+    .stTable { background-color: #ffffff; }
+    .main-header { color: #1e3a8a; text-align: center; }
+    </style>
+    """, unsafe_allow_html=True)
+
+with st.sidebar:
+    st.title("⚙️ تحكم المختبر")
+    # زر المزامنة يقرأ الآن من الملفات المحلية مباشرة
+    if st.button("🔄 تفعيل اتصال الداتا"):
+        df_q, df_w = DataEngine.load_local_resources()
+        if df_q is not None:
+            st.session_state['df_quran'] = df_q
+            st.session_state['df_words'] = df_w
+            st.success("🟢 اللمبة خضراء: تم الاتصال بمجلد data")
+
+    st.write("---")
+    st.subheader("👥 الأعضاء النشطين")
+    a1_active = st.toggle("A1: المستقبل", value=True)
+    a2_active = st.toggle("A2: المحلل السياقي", value=True)
+
+# --- 3. السبورة المركزية (Main Board) ---
+st.markdown('<h1 class="main-header">🏛️ مجلس البينة - التحليل المادي</h1>', unsafe_allow_html=True)
+
+# خانة البحث
+target_word = st.text_input("أدخل اللفظ المكتوب المراد رصده:", placeholder="مثال: كتب")
+
+if target_word:
+    if 'df_words' in st.session_state and 'df_quran' in st.session_state:
+        df_words = st.session_state['df_words']
+        df_quran = st.session_state['df_quran']
+        
+        # تنفيذ مهام العضو A1 (تحديد الهوية المادية للفظ)
+        if a1_active:
+            st.subheader("📦 بيانات اللفظ (العضو A1)")
+            # البحث عن اللفظ في عمود 'word'
+            word_result = df_words[df_words['word'] == target_word]
+            
+            if not word_result.empty:
+                st.dataframe(word_result, use_container_width=True)
+                
+                # تنفيذ مهام العضو A2 (رصد السياقات النصية)
+                if a2_active:
+                    st.write("---")
+                    st.subheader(f"📖 السياقات المادية للفظ '{target_word}' (العضو A2)")
+                    # البحث في نص القرآن
+                    # ملاحظة: تأكد أن اسم العمود في الإكسيل هو 'text'
+                    context_results = df_quran[df_quran['text'].str.contains(target_word, na=False)]
+                    
+                    if not context_results.empty:
+                        st.info(f"تم رصد {len(context_results)} مورد مادي.")
+                        st.table(context_results[['absolute_order', 'surah', 'ayah', 'text']].head(20))
+                    else:
+                        st.warning("اللفظ موجود في الجداول ولكن لم يُرصد له نص مطابق في ملف القرآن.")
+            else:
+                st.error(f"اللفظ '{target_word}' غير مدرج في سجلات البيانات الحالية.")
+    else:
+        st.warning("⚠️ المجلس بانتظار المادة الخام. اضغط على 'تفعيل اتصال الداتا' من القائمة الجانبية.")
+
+# تذييل تقني
+if 'df_quran' in st.session_state:
+    st.divider()
+    st.caption(f"قاعدة البيانات النشطة: {len(st.session_state['df_quran'])} سطر مادي.")
